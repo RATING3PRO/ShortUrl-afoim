@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Short URL Administration</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; background-color: #f8f9fa; color: #333; }
+        .container { background: white; border: 1px solid #e9ecef; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        h1, h2 { margin-top: 0; color: #2c3e50; }
+        h1 { border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 25px; font-size: 24px; }
+        h2 { font-size: 20px; margin-bottom: 15px; }
+        .hidden { display: none; }
+        input, button, select { padding: 10px; margin: 5px 0; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; }
+        button { cursor: pointer; background-color: #007bff; color: white; border: none; font-weight: 500; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; font-weight: 600; color: #495057; }
+        .actions button { margin-right: 5px; padding: 6px 12px; font-size: 0.85em; }
+        .error { color: #dc3545; margin-top: 10px; font-size: 14px; }
+        .logout { float: right; cursor: pointer; color: #6c757d; text-decoration: none; font-size: 14px; }
+        .logout:hover { color: #343a40; text-decoration: underline; }
+
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5); 
+            backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 10% auto; 
+            padding: 30px;
+            border: 1px solid #rgba(0,0,0,.2);
+            width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,.5);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="url"],
+        .form-group input[type="datetime-local"],
+        .form-group input[type="password"] {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        /* Toast Notifications */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; }
+        .toast { 
+            background: white; 
+            padding: 12px 20px; 
+            border-radius: 6px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+            margin-bottom: 10px; 
+            display: flex; 
+            align-items: center; 
+            animation: slideIn 0.3s ease-out; 
+            border-left: 5px solid #007bff; 
+            font-size: 14px;
+            min-width: 250px;
+        }
+        .toast.success { border-left-color: #28a745; }
+        .toast.error { border-left-color: #dc3545; }
+        .toast.warning { border-left-color: #ffc107; }
+        @keyframes slideIn { 
+            from { transform: translateX(100%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="toast-container" class="toast-container"></div>
+    <div class="container">
+        <h1>🛠️ Administration Console</h1>
+        
+        <!-- View: Loading -->
+        <div id="loading">Initializing System...</div>
+
+        <!-- View: Setup Admin -->
+        <div id="setupView" class="hidden">
+            <h2>Initial System Configuration</h2>
+            <p>No administrator account detected. Please create the root administrator account.</p>
+            <input type="text" id="setupUser" placeholder="Admin Username" required><br>
+            <input type="password" id="setupPass" placeholder="Secure Password" required><br>
+            <button onclick="setupAdmin()">Initialize System</button>
+            <div id="setupError" class="error"></div>
+        </div>
+
+        <!-- View: Login -->
+        <div id="loginView" class="hidden">
+            <h2>Administrator Login</h2>
+            <input type="text" id="loginUser" placeholder="Username" required><br>
+            <input type="password" id="loginPass" placeholder="Password" required><br>
+            <input type="text" id="loginTotp" placeholder="2FA Token (If enabled)" maxlength="6"><br>
+            <button onclick="login()">Authenticate</button>
+            <div id="loginError" class="error"></div>
+        </div>
+
+        <!-- View: Dashboard -->
+        <div id="dashboardView" class="hidden">
+            <span class="logout" onclick="logout()">Sign Out</span>
+            <h2>Dashboard Overview</h2>
+            
+            <button onclick="openModal()">+ Generate New Link</button>
+            <div style="float: right;">
+                <button onclick="openSettings()">System Configuration</button>
+                <button onclick="open2FAModal()">Security Settings</button>
+            </div>
+
+            <h3>Link Management</h3>
+            
+            <div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="filterSearch" placeholder="Search by URL or Code..." style="width: 200px;" oninput="applyFilters()">
+                <select id="filterCreator" onchange="applyFilters()">
+                    <option value="">All Creators</option>
+                    <option value="admin">Administrator</option>
+                    <option value="guest">Guest User</option>
+                </select>
+                <input type="date" id="filterStartDate" onchange="applyFilters()">
+                <input type="date" id="filterEndDate" onchange="applyFilters()">
+                <button onclick="applyFilters()">Refresh Filters</button>
+                
+                <div style="float: right;">
+                    <select id="bulkAction" style="margin-right: 5px;">
+                        <option value="">-- Bulk Actions --</option>
+                        <option value="delete">Delete Selected</option>
+                        <option value="enable_interstitial">Enable Interstitial</option>
+                        <option value="disable_interstitial">Disable Interstitial</option>
+                        <option value="disable_link">Suspend Links</option>
+                        <option value="enable_link">Activate Links</option>
+                    </select>
+                    <button onclick="executeBulkAction()" style="background-color: #6c757d; color: white;">Apply</button>
+                </div>
+            </div>
+
+            <table id="urlsTable">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                        <th>Short Code</th>
+                        <th>Original URL</th>
+                        <th>Creator</th>
+                        <th>Created At</th>
+                        <th>Expires At</th>
+                        <th>Visits</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Edit/Create Modal -->
+    <div id="urlModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Configure Link</h2>
+            <div class="form-group">
+                <label for="modalOriginalUrl">Target URL:</label>
+                <input type="url" id="modalOriginalUrl" placeholder="https://example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="modalShortCode">Custom Slug (Optional):</label>
+                <input type="text" id="modalShortCode" placeholder="custom-code">
+            </div>
+            <div class="form-group">
+                <label for="modalExpiresAt">Expiration Date:</label>
+                <input type="datetime-local" id="modalExpiresAt">
+                <label style="display:inline; margin-left: 10px;">
+                    <input type="checkbox" id="modalNoExpiration" onchange="toggleExpiration()" checked> No Expiration
+                </label>
+            </div>
+            
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            <h3>Security & Control</h3>
+
+            <div class="form-group">
+                <label style="display:inline; cursor:pointer;">
+                    <input type="checkbox" id="modalUseInterstitial"> 
+                    Enforce Interstitial Warning
+                </label>
+                <br><small>Always display a security warning page before redirecting, overriding global settings.</small>
+            </div>
+
+            <div class="form-group">
+                <label style="display:inline; cursor:pointer; color: #dc3545;">
+                    <input type="checkbox" id="modalIsDisabled" onchange="toggleDisableReason()"> 
+                    Deactivate Link
+                </label>
+            </div>
+            <div class="form-group">
+                <label for="modalDisableReason">Suspension Reason (Visible to user):</label>
+                <textarea id="modalDisableReason" rows="3" style="width:100%; box-sizing:border-box;" disabled></textarea>
+            </div>
+
+            <button onclick="saveUrl()" id="modalSaveBtn">Save Changes</button>
+            <div id="modalError" class="error"></div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSettings()">&times;</span>
+            <h2>Global Configuration</h2>
+            <div class="form-group">
+                <label for="settingRootRedirect">Root Redirect URL:</label>
+                <input type="url" id="settingRootRedirect" placeholder="https://example.com">
+                <small>Redirect visitors from the homepage (/) to this URL.</small>
+            </div>
+            <div class="form-group">
+                <label for="settingFallbackRedirect">Fallback Redirect URL:</label>
+                <input type="url" id="settingFallbackRedirect" placeholder="https://example.com/404">
+                <small>Redirect unmatched requests here. The requested path will be appended.</small>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="display:inline; cursor:pointer;">
+                    <input type="checkbox" id="settingShowInterstitial"> 
+                    Enable Interstitial Warning for Guest Links
+                </label>
+                <br>
+                <small>If enabled, links created by guest users will display a security warning page before redirecting.</small>
+            </div>
+            
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            <h3>Cloudflare Turnstile (Captcha)</h3>
+            <div class="form-group">
+                <label for="settingTurnstileSiteKey">Site Key:</label>
+                <input type="text" id="settingTurnstileSiteKey" placeholder="0x4AAAAAA...">
+            </div>
+            <div class="form-group">
+                <label for="settingTurnstileSecretKey">Secret Key:</label>
+                <input type="password" id="settingTurnstileSecretKey" placeholder="0x4AAAAAA...">
+                <small>Required to enable captcha on public link creation.</small>
+            </div>
+
+            <button onclick="saveSettings()">Save Configuration</button>
+            <div id="settingsError" class="error"></div>
+        </div>
+    </div>
+
+    <!-- 2FA Setup Modal -->
+    <div id="twoFaModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="close2FAModal()">&times;</span>
+            <h2>Two-Factor Authentication (2FA)</h2>
+            
+            <div id="twoFaStatus">Retrieving status...</div>
+            
+            <!-- Setup Flow -->
+            <div id="twoFaSetup" class="hidden">
+                <p>Scan the QR code below using your preferred authenticator app (e.g., Google Authenticator, Authy):</p>
+                <div id="qrCodeImage" class="qr-code"></div>
+                <div class="form-group">
+                    <label for="twoFaVerifyCode">Verification Code:</label>
+                    <input type="text" id="twoFaVerifyCode" placeholder="Enter 6-digit code" maxlength="6">
+                </div>
+                <button onclick="enable2FA()">Verify & Activate</button>
+                <div id="twoFaSetupError" class="error"></div>
+            </div>
+
+            <!-- Disable Flow -->
+            <div id="twoFaDisable" class="hidden">
+                <p style="color: #28a745; font-weight: bold;">2FA is currently ACTIVE.</p>
+                <button onclick="disable2FA()" style="background-color: #ffe6e6; color: #dc3545; border: 1px solid #dc3545;">Deactivate 2FA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <span class="close" onclick="confirmNo()">&times;</span>
+            <h2 style="color: #dc3545;">⚠️ Confirmation</h2>
+            <p id="confirmMessage" style="font-size: 16px; margin: 20px 0;">Are you sure?</p>
+            <div style="margin-top: 30px;">
+                <button onclick="confirmNo()" style="background-color: #6c757d; margin-right: 10px;">Cancel</button>
+                <button onclick="confirmYes()" style="background-color: #dc3545;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let token = localStorage.getItem('token');
+        let currentEditId = null;
+        let currentTotpSecret = null; // Temporary secret during setup
+        let allUrls = []; // Cache for client-side filtering
+        let confirmResolve = null; // For Confirmation Modal
+
+        // Initial Check
+        async function init() {
+            if (token) {
+                try {
+                    await loadDashboard();
+                    return;
+                } catch (e) {
+                    console.log('Token invalid or expired');
+                    localStorage.removeItem('token');
+                    token = null;
+                }
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/check`);
+                const data = await res.json();
+                
+                document.getElementById('loading').classList.add('hidden');
+                
+                if (data.setupRequired) {
+                    document.getElementById('setupView').classList.remove('hidden');
+                } else {
+                    document.getElementById('loginView').classList.remove('hidden');
+                }
+            } catch (e) {
+                document.getElementById('loading').innerText = 'Error connecting to server';
+                showToast('Failed to connect to server', 'error');
+            }
+        }
+
+        // Toast Helper
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            // Icon
+            let icon = '';
+            if (type === 'success') icon = '✅ ';
+            else if (type === 'error') icon = '❌ ';
+            else if (type === 'warning') icon = '⚠️ ';
+            
+            toast.innerText = icon + message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Confirmation Helper
+        function showConfirm(message) {
+            document.getElementById('confirmMessage').innerText = message;
+            document.getElementById('confirmModal').style.display = 'block';
+            return new Promise((resolve) => {
+                confirmResolve = resolve;
+            });
+        }
+
+        function confirmYes() {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (confirmResolve) confirmResolve(true);
+            confirmResolve = null;
+        }
+
+        function confirmNo() {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (confirmResolve) confirmResolve(false);
+            confirmResolve = null;
+        }
+
+        // Setup Admin
+        async function setupAdmin() {
+            const username = document.getElementById('setupUser').value;
+            const password = document.getElementById('setupPass').value;
+            const errorDiv = document.getElementById('setupError');
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/setup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    showToast('Admin account created successfully! Please login.', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    errorDiv.innerText = data.error;
+                    showToast(data.error, 'error');
+                }
+            } catch (e) {
+                errorDiv.innerText = 'Request failed';
+            }
+        }
+
+        // Login
+        async function login() {
+            const username = document.getElementById('loginUser').value;
+            const password = document.getElementById('loginPass').value;
+            const totpToken = document.getElementById('loginTotp').value;
+            const errorDiv = document.getElementById('loginError');
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, totpToken })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    document.getElementById('loginView').classList.add('hidden');
+                    loadDashboard();
+                } else {
+                    if (data.error === 'TOTP_REQUIRED') {
+                        errorDiv.innerText = 'Please enter your 2FA Code';
+                        document.getElementById('loginTotp').focus();
+                    } else {
+                        errorDiv.innerText = data.error;
+                    }
+                }
+            } catch (e) {
+                errorDiv.innerText = 'Login failed';
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            location.reload();
+        }
+
+        // Load Dashboard (Fetch All Data)
+        async function loadDashboard() {
+            try {
+                // Fetch all URLs (no params)
+                const res = await fetch(`${API_BASE}/admin/urls`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) throw new Error('Unauthorized');
+
+                allUrls = await res.json();
+                applyFilters(); // Filter client-side
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboardView').classList.remove('hidden');
+            } catch (e) {
+                console.error(e);
+                if (e.message === 'Unauthorized') logout();
+            }
+        }
+
+        // Apply Client-Side Filters
+        function applyFilters() {
+            const search = document.getElementById('filterSearch').value.toLowerCase();
+            const creator = document.getElementById('filterCreator').value;
+            const startDateVal = document.getElementById('filterStartDate').value;
+            const endDateVal = document.getElementById('filterEndDate').value;
+
+            const startDate = startDateVal ? new Date(startDateVal) : null;
+            const endDate = endDateVal ? new Date(endDateVal) : null;
+            // Adjust end date to end of day
+            if (endDate) endDate.setHours(23, 59, 59, 999);
+
+            const filtered = allUrls.filter(url => {
+                // Search Filter
+                if (search && !url.short_code.toLowerCase().includes(search) && !url.original_url.toLowerCase().includes(search)) {
+                    return false;
+                }
+
+                // Creator Filter
+                if (creator === 'admin') {
+                    if (url.is_admin_created !== 1) return false;
+                } else if (creator === 'guest') {
+                    if (url.is_admin_created === 1) return false;
+                }
+
+                // Date Filter
+                const createdAt = new Date(url.created_at);
+                if (startDate && createdAt < startDate) return false;
+                if (endDate && createdAt > endDate) return false;
+
+                return true;
+            });
+
+            renderTable(filtered);
+        }
+
+        // Render Table
+        function renderTable(urls) {
+            const tbody = document.querySelector('#urlsTable tbody');
+            tbody.innerHTML = '';
+
+            urls.forEach(url => {
+                const tr = document.createElement('tr');
+                
+                // Checkbox
+                const tdCheck = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'url-checkbox';
+                checkbox.value = url.id;
+                tdCheck.appendChild(checkbox);
+
+                // Short Code
+                const tdCode = document.createElement('td');
+                const link = document.createElement('a');
+                link.href = `/${url.short_code}`;
+                link.target = '_blank';
+                link.textContent = url.short_code;
+                tdCode.appendChild(link);
+                
+                // Original URL
+                const tdUrl = document.createElement('td');
+                tdUrl.style.maxWidth = '300px';
+                tdUrl.style.overflow = 'hidden';
+                tdUrl.style.textOverflow = 'ellipsis';
+                tdUrl.style.whiteSpace = 'nowrap';
+                tdUrl.title = url.original_url;
+                tdUrl.textContent = url.original_url;
+
+                // Creator
+                const tdCreator = document.createElement('td');
+                if (url.is_admin_created) {
+                    tdCreator.innerHTML = '<span style="color:green; font-weight:bold;">Admin</span>';
+                } else {
+                    tdCreator.innerHTML = '<span style="color:orange;">Guest</span>';
+                }
+                
+                // Date
+                const tdDate = document.createElement('td');
+                tdDate.textContent = new Date(url.created_at).toLocaleString();
+                
+                // Expires At
+                const tdExpires = document.createElement('td');
+                if (url.expires_at) {
+                    tdExpires.textContent = new Date(url.expires_at).toLocaleString();
+                    if (new Date(url.expires_at) < new Date()) {
+                        tdExpires.style.color = 'red';
+                        tdExpires.textContent += ' (Expired)';
+                    }
+                } else {
+                    tdExpires.textContent = 'Never';
+                }
+
+                // Visits
+                const tdVisits = document.createElement('td');
+                tdVisits.textContent = url.visit_count || 0;
+                tdVisits.style.fontWeight = 'bold';
+                
+                // Status (Disabled/Active) - appended to Visits or new column? 
+                // Let's add visual indicator to the row or short code if disabled.
+                if (url.is_disabled) {
+                    tr.style.backgroundColor = '#fff5f5'; // Light red background
+                    tdCode.innerHTML += ' <span style="color:#dc3545; font-size:0.8em; font-weight:600; margin-left:5px;">[SUSPENDED]</span>';
+                }
+
+                // Actions
+                const tdActions = document.createElement('td');
+                tdActions.className = 'actions';
+                
+                const btnDelete = document.createElement('button');
+                btnDelete.textContent = 'Delete';
+                btnDelete.onclick = () => deleteUrl(url.id);
+                
+                const btnEdit = document.createElement('button');
+                btnEdit.textContent = 'Edit';
+                btnEdit.onclick = () => openModal(url); // Pass full url object
+                
+                tdActions.appendChild(btnDelete);
+                tdActions.appendChild(btnEdit);
+                
+                tr.appendChild(tdCheck);
+                tr.appendChild(tdCode);
+                tr.appendChild(tdUrl);
+                tr.appendChild(tdCreator);
+                tr.appendChild(tdDate);
+                tr.appendChild(tdExpires);
+                tr.appendChild(tdVisits);
+                tr.appendChild(tdActions);
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Bulk Actions Logic
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.url-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        }
+
+        async function executeBulkAction() {
+            const action = document.getElementById('bulkAction').value;
+            const checkboxes = document.querySelectorAll('.url-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.value);
+
+            if (!action) {
+                showToast('Please select an action.', 'warning');
+                return;
+            }
+            if (ids.length === 0) {
+                showToast('Please select at least one URL.', 'warning');
+                return;
+            }
+
+            if (!await showConfirm(`Are you sure you want to apply "${action}" to ${ids.length} items?`)) return;
+
+            // Handle Delete
+            if (action === 'delete') {
+                await bulkDelete(ids);
+                return;
+            }
+
+            // Handle Updates
+            const updates = {};
+            if (action === 'enable_interstitial') updates.use_interstitial = 1;
+            if (action === 'disable_interstitial') updates.use_interstitial = 0;
+            if (action === 'disable_link') updates.is_disabled = 1;
+            if (action === 'enable_link') updates.is_disabled = 0;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/urls/bulk-update`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ ids, updates })
+                });
+
+                if (res.ok) {
+                    showToast('Bulk action completed successfully.', 'success');
+                    loadDashboard();
+                    document.getElementById('selectAll').checked = false;
+                    document.getElementById('bulkAction').value = '';
+                } else {
+                    const data = await res.json();
+                    showToast(data.error || 'Failed to update URLs', 'error');
+                }
+            } catch (e) {
+                showToast('Network error', 'error');
+            }
+        }
+
+        async function bulkDelete(ids) {
+            try {
+                const res = await fetch(`${API_BASE}/admin/urls/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ ids })
+                });
+
+                if (res.ok) {
+                    showToast('Selected items deleted successfully.', 'success');
+                    loadDashboard();
+                    document.getElementById('selectAll').checked = false;
+                    document.getElementById('bulkAction').value = '';
+                } else {
+                    showToast('Failed to delete selected URLs', 'error');
+                }
+            } catch (e) {
+                showToast('Network error', 'error');
+            }
+        }
+
+        // Modal Logic
+        function openModal(url = null) {
+            const modal = document.getElementById('urlModal');
+            const title = document.getElementById('modalTitle');
+            const errorDiv = document.getElementById('modalError');
+            
+            // Reset fields
+            errorDiv.innerText = '';
+            
+            if (url) {
+                // Edit Mode
+                currentEditId = url.id;
+                title.innerText = 'Edit Link Configuration';
+                document.getElementById('modalOriginalUrl').value = url.original_url;
+                document.getElementById('modalShortCode').value = url.short_code;
+                
+                if (url.expires_at) {
+                    document.getElementById('modalNoExpiration').checked = false;
+                    document.getElementById('modalExpiresAt').disabled = false;
+                    // Format for datetime-local input: YYYY-MM-DDTHH:mm
+                    const date = new Date(url.expires_at);
+                    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                    document.getElementById('modalExpiresAt').value = date.toISOString().slice(0, 16);
+                } else {
+                    document.getElementById('modalNoExpiration').checked = true;
+                    document.getElementById('modalExpiresAt').disabled = true;
+                    document.getElementById('modalExpiresAt').value = '';
+                }
+
+                // New Fields
+                document.getElementById('modalUseInterstitial').checked = url.use_interstitial === 1;
+                document.getElementById('modalIsDisabled').checked = url.is_disabled === 1;
+                document.getElementById('modalDisableReason').value = url.disable_reason || 'This link has been disabled due to potential security risks. For your safety, redirection has been blocked.';
+                toggleDisableReason(); // Enable/Disable textarea
+
+            } else {
+                // Create Mode
+                currentEditId = null;
+                title.innerText = 'Generate New Link';
+                document.getElementById('modalOriginalUrl').value = '';
+                document.getElementById('modalShortCode').value = '';
+                document.getElementById('modalNoExpiration').checked = true;
+                document.getElementById('modalExpiresAt').disabled = true;
+                document.getElementById('modalExpiresAt').value = '';
+                
+                // Reset New Fields
+                document.getElementById('modalUseInterstitial').checked = false;
+                document.getElementById('modalIsDisabled').checked = false;
+                document.getElementById('modalDisableReason').value = 'This link has been disabled due to potential security risks. For your safety, redirection has been blocked.';
+                toggleDisableReason();
+            }
+            
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById('urlModal').style.display = "none";
+        }
+
+        function toggleExpiration() {
+            const checkbox = document.getElementById('modalNoExpiration');
+            const input = document.getElementById('modalExpiresAt');
+            input.disabled = checkbox.checked;
+            if (checkbox.checked) input.value = '';
+        }
+
+        function toggleDisableReason() {
+            const checkbox = document.getElementById('modalIsDisabled');
+            const input = document.getElementById('modalDisableReason');
+            input.disabled = !checkbox.checked;
+        }
+
+        // Save (Create or Update)
+        async function saveUrl() {
+            const originalUrl = document.getElementById('modalOriginalUrl').value;
+            const shortCode = document.getElementById('modalShortCode').value;
+            const noExpiration = document.getElementById('modalNoExpiration').checked;
+            const use_interstitial = document.getElementById('modalUseInterstitial').checked;
+            const is_disabled = document.getElementById('modalIsDisabled').checked;
+            const disable_reason = document.getElementById('modalDisableReason').value;
+
+            let expiresAt = null;
+            
+            if (!noExpiration) {
+                const dateVal = document.getElementById('modalExpiresAt').value;
+                if (dateVal) {
+                    expiresAt = new Date(dateVal).toISOString();
+                }
+            }
+            
+            const errorDiv = document.getElementById('modalError');
+            
+            const payload = { originalUrl, shortCode, expiresAt, use_interstitial, is_disabled, disable_reason };
+            let url = `${API_BASE}/admin/urls`;
+            let method = 'POST';
+            
+            if (currentEditId) {
+                url = `${API_BASE}/admin/urls/${currentEditId}`;
+                method = 'PUT';
+            }
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    showToast(currentEditId ? 'Link updated successfully.' : 'Link created successfully.', 'success');
+                    closeModal();
+                    loadDashboard();
+                } else {
+                    const data = await res.json();
+                    errorDiv.innerText = data.error || 'Error saving URL';
+                }
+            } catch (e) {
+                errorDiv.innerText = 'Network error';
+            }
+        }
+
+        // Delete URL
+        async function deleteUrl(id) {
+            if (!await showConfirm('Are you sure you want to delete this URL?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/urls/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    showToast('Link deleted successfully.', 'success');
+                    loadDashboard();
+                } else {
+                    showToast('Failed to delete link', 'error');
+                }
+            } catch (e) {
+                showToast('Error deleting link', 'error');
+            }
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('urlModal');
+            const settingsModal = document.getElementById('settingsModal');
+            const twoFaModal = document.getElementById('twoFaModal');
+            if (event.target == modal) closeModal();
+            if (event.target == settingsModal) closeSettings();
+            if (event.target == twoFaModal) close2FAModal();
+        }
+
+        // Settings Logic
+        async function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            const errorDiv = document.getElementById('settingsError');
+            
+            errorDiv.innerText = '';
+            
+            try {
+                const res = await fetch(`${API_BASE}/admin/settings`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const settings = await res.json();
+                
+                document.getElementById('settingRootRedirect').value = settings.root_redirect || '';
+                document.getElementById('settingFallbackRedirect').value = settings.fallback_redirect || '';
+                document.getElementById('settingShowInterstitial').checked = settings.show_interstitial === 'true';
+                document.getElementById('settingTurnstileSiteKey').value = settings.turnstile_site_key || '';
+                // Secret key is not sent back for security, or we can send a placeholder if set
+                document.getElementById('settingTurnstileSecretKey').placeholder = settings.turnstile_secret_key ? '******** (Hidden)' : '0x4AAAAAA...';
+                
+                modal.style.display = "block";
+            } catch (e) {
+                showToast('Failed to load settings', 'error');
+            }
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = "none";
+        }
+
+        async function saveSettings() {
+            const root_redirect = document.getElementById('settingRootRedirect').value;
+            const show_interstitial = document.getElementById('settingShowInterstitial').checked ? 'true' : 'false';
+            const fallback_redirect = document.getElementById('settingFallbackRedirect').value;
+            const turnstile_site_key = document.getElementById('settingTurnstileSiteKey').value;
+            const turnstile_secret_key = document.getElementById('settingTurnstileSecretKey').value;
+            
+            const payload = { root_redirect, fallback_redirect, show_interstitial, turnstile_site_key };
+            if (turnstile_secret_key) payload.turnstile_secret_key = turnstile_secret_key;
+
+            const errorDiv = document.getElementById('settingsError');
+            
+            try {
+                const res = await fetch(`${API_BASE}/admin/settings`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    showToast('Configuration saved successfully.', 'success');
+                    closeSettings();
+                } else {
+                    const data = await res.json();
+                    errorDiv.innerText = data.error || 'Error saving settings';
+                    showToast(data.error || 'Error saving settings', 'error');
+                }
+            } catch (e) {
+                errorDiv.innerText = 'Network error';
+            }
+        }
+
+        // --- 2FA Logic ---
+        async function open2FAModal() {
+            const modal = document.getElementById('twoFaModal');
+            const statusDiv = document.getElementById('twoFaStatus');
+            const setupDiv = document.getElementById('twoFaSetup');
+            const disableDiv = document.getElementById('twoFaDisable');
+            
+            modal.style.display = "block";
+            statusDiv.innerText = 'Checking status...';
+            setupDiv.classList.add('hidden');
+            disableDiv.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/2fa/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                statusDiv.innerText = '';
+
+                if (data.enabled) {
+                    disableDiv.classList.remove('hidden');
+                } else {
+                    // Start Setup Process
+                    start2FASetup();
+                }
+            } catch (e) {
+                statusDiv.innerText = 'Error checking status';
+            }
+        }
+
+        async function start2FASetup() {
+            const setupDiv = document.getElementById('twoFaSetup');
+            const qrImage = document.getElementById('qrCodeImage');
+            
+            setupDiv.classList.remove('hidden');
+            qrImage.innerHTML = 'Generating QR...';
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/2fa/generate`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                currentTotpSecret = data.secret;
+                qrImage.innerHTML = `<img src="${data.imageUrl}" alt="QR Code">`;
+            } catch (e) {
+                qrImage.innerHTML = 'Error generating QR';
+            }
+        }
+
+        async function enable2FA() {
+            const code = document.getElementById('twoFaVerifyCode').value;
+            const errorDiv = document.getElementById('twoFaSetupError');
+            
+            if (!code || code.length !== 6) {
+                errorDiv.innerText = 'Please enter a 6-digit code';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/2fa/enable`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ secret: currentTotpSecret, token: code })
+                });
+
+                if (res.ok) {
+                    showToast('2FA Enabled Successfully!', 'success');
+                    close2FAModal();
+                } else {
+                    const data = await res.json();
+                    errorDiv.innerText = data.error || 'Verification failed';
+                }
+            } catch (e) {
+                errorDiv.innerText = 'Network error';
+            }
+        }
+
+        async function disable2FA() {
+            if (!await showConfirm('Are you sure you want to disable 2FA? This will lower your account security.')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/2fa/disable`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    showToast('2FA Disabled', 'warning');
+                    close2FAModal();
+                } else {
+                    showToast('Failed to disable 2FA', 'error');
+                }
+            } catch (e) {
+                showToast('Error disabling 2FA', 'error');
+            }
+        }
+
+        function close2FAModal() {
+            document.getElementById('twoFaModal').style.display = "none";
+            // Clear temporary data
+            document.getElementById('twoFaVerifyCode').value = '';
+            document.getElementById('twoFaSetupError').innerText = '';
+        }
+
+        // Run
+        init();
+    </script>
+</body>
+</html>
