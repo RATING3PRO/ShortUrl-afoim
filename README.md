@@ -27,6 +27,14 @@ You can run this project easily using Docker Compose.
 
     The SQLite database is stored in the `./data` directory on your host machine, mapped to `/app/data` in the container.
 
+## Administration
+
+Access the admin dashboard at `/admin.html` (e.g., `http://localhost:3000/admin.html`).
+
+1.  **Initial Setup**: The first time you access the admin page, the system will detect that no users exist and prompt you to create an admin account.
+2.  **Login**: Use the credentials you created to log in.
+3.  **Security**: You can enable Two-Factor Authentication (TOTP) in the dashboard settings.
+
 ### GitHub Actions
 
 This repository includes a GitHub Workflow `.github/workflows/docker-build.yml` that automatically:
