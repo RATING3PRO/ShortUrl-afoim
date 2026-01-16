@@ -11,14 +11,14 @@ const qrcode = require('qrcode');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = `http://localhost:${PORT}`;
-const JWT_SECRET = 'your-secret-key-change-it-in-prod'; // Simple secret for demo
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-it-in-prod'; // Simple secret for demo
 
 // Middleware
 app.use(express.json());
 app.use(cors());
 
 // Database Setup
-const dbPath = path.resolve(__dirname, 'shorturl.db');
+const dbPath = process.env.DB_PATH || path.resolve(__dirname, 'shorturl.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);

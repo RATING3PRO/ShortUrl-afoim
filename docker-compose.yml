@@ -1,0 +1,12 @@
+services:
+  shorturl:
+    build: .
+    container_name: shorturl
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - JWT_SECRET=change_this_to_a_secure_random_string
+      - NODE_ENV=production
